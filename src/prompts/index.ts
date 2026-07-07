@@ -40,7 +40,7 @@ export function buildPrompt(
       };
     }
 
-    // 🚧 UI 未开放（constants/platforms.ts 中 enabled: false）—— prompt 已就绪，后续启用只需改 enabled
+    // ✅ UI 已开放
     case 'weibo': {
       return {
         system: WEIBO_SYSTEM_PROMPT,
