@@ -185,24 +185,72 @@ git push origin main          # SSH，不要用 HTTPS
 - 每阶段结束跑 `tsc` + `build` 都通过后给用户 7 条自检清单
 - 不堆砌冗余功能
 
+### 6.7 自动版本管理（强制约定 — Claude 每次完成任务必须执行）
+
+> **核心原则**：每次完成需求/模块/bugfix，**立即进行 Git 本地提交 + 更新 CLAUDE.md**，不等用户提醒。
+
+#### 触发时机（满足任一即执行）
+
+- 用户说"完成"/"没问题"/"继续"/"提交"/"push"
+- 跑完 `tsc + build` 自检全通过
+- 独立任务结束（用户已经验收）或单一大功能拆出的子模块完成并测试通过
+
+#### 自动执行步骤（Claude 按顺序执行）
+
+```
+1. 跑 tsc + build 确认本次改动未破坏构建
+2. git add 本次涉及的文件（rm 不需要的编译产物：dist/ 等不提交）
+3. git commit（遵循 Conventional Commit 规范）
+4. 更新 CLAUDE.md（如有结构/架构/功能变化）：
+   - 目录结构：新增/改动的文件
+   - 已完成功能：第 4 节加 ✅ 标记
+   - 下一步候选：第 8 节划掉已完成 + 新候选加入
+   - 架构描述：技术栈变化同步反映
+5. 告知用户 commit hash + 改了什么（如用户要求"自动"则静默执行）
+```
+
+#### Commit message 规范（沿用 Conventional Commits）
+
+- `feat:` 新功能 / 新模块
+- `fix:` bug 修复
+- `refactor:` 重构（不改行为）
+- `docs:` CLAUDE.md / 注释 / 文档
+- `chore:` 构建 / 依赖 / 脚本
+- `test:` 测试脚本
+- 例：`feat: 从 node:sqlite 迁移到 MySQL 8.0`
+
+#### 不提交到 Git 的内容（已在 .gitignore）
+
+- `node_modules/`
+- `dist/` （前端 GitHub Pages 部署物，由 Actions 生成）
+- `server/data/` （旧 sqlite 运行时数据，已移除）
+- `.env` / `*.local`
+- 临时 e2e 脚本产物（如 `.e2e.db*`）
+
+#### 远程推送
+
+- **默认每次本地 commit 后立即 push origin main**（SSH，已验证不会被拦截）
+- 除非用户明确说"本次不 push"
+- 推送前跑一次 `git status` 确认没有不该提交的敏感文件
+
 ## 7. 已知待修 / 用户反馈的问题
 
-- **刷新页面后历史丢失**：某些手机浏览器（iOS Safari 7 天自动清理）会清 localStorage；长期方案需要后端 + 数据库跨设备同步
+- ~~**刷新页面后历史丢失**~~ ← ✅ 已通过 MySQL 云同步解决（MVP）
+- ~~**跨设备同步需求**~~ ← ✅ 已实现（邮箱+JWT+MySQL 最后写入胜出）
 - **导出到指定目录**：已实现 File System Access API（PC Chrome/Edge PWA 体验佳，Safari 降级为传统下载）
-- **用户跨设备同步需求**：确认需要后端，尚未实现
 
 ## 8. 下一步候选（待用户选择）
 
 按产品价值排序：
 
-1. ~~**跨设备历史同步后端**~~ ← ✅ 已完成（邮箱 + JWT session + node:sqlite + 最后写入胜出）
+1. ~~**跨设备历史同步后端**~~ ← ✅ 已完成（邮箱 + JWT session + MySQL 8.0 连接池 + 最后写入胜出）
 2. ~~**多平台扩写 UI 开放**~~ ← ✅ 已完成（微博/抖音/公众号 enabled:true，复用 deepseek-chat）
-3. **邮件通道 PROD 化**（mailer.js 接 Resend/OTP；settings 中加"email verify/改绑"）
-4. **历史软删同步闭环**（当前 remove 是本地硬删，需补 `deleted` payload 让服务端也软删以免重生）
-5. **模板系统**（保存常用输入组合为可复用模板，与 history 表联合托管）
+3. ~~**后端迁移 MySQL 8.0**~~ ← ✅ 已完成（node:sqlite → mysql2，保留签名零破坏）
+4. **邮件通道 PROD**（mailer.js 接 Resend/nodemailer，不再直返验证码）
+5. **历史软删同步闭环**（当前 remove 是本地硬删，需补 `deleted` payload 让服务端也软删以免重生）
 6. **Key 跨端 E2E 加密**（当前同 session 发明文，多设备应走端到端加密）
-7. **公网部署**（Render/Fly.io/自有 VPS；JWT_SECRET 必须独立；DB 定期备份）
-8. **模板系统**（保存常用输入组合）
+7. **公网部署**（VPS / Render / Fly.io；JWT_SECRET 必须独立；DB 定期备份）
+8. **模板系统**（保存常用输入组合，与 history 表联合托管）
 9. **导出/导入历史备份文件**（零后端，手动迁移，轻量过渡方案）
 10. **桌面 EXE 打包**（Tauri，~10MB）
 11. **Android APK**（Capacitor）
