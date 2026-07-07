@@ -24,32 +24,34 @@ function sanitizeHistoryItem(it) {
 
 function toClient(row) {
   return {
-    id: row.id,
+    id: row.id ?? row.history_id,
     content: row.content,
     platform: row.platform,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    deleted: !!row.deleted,
+    createdAt: row.createdAt ?? Number(row.created_at),
+    updatedAt: row.updatedAt ?? Number(row.updated_at),
+    deleted: row.deleted === undefined ? false : !!row.deleted,
   };
 }
 
-router.post('/history', (req, res) => {
+router.post('/history', async (req, res) => {
   const userId = req.userId;
   const { items: rawItems, lastSyncAt: rawLast } = req.body || {};
   const lastSyncAt = rawLast === null || rawLast === undefined ? null : Number(rawLast);
+
   const clean = (Array.isArray(rawItems) ? rawItems : []).map(sanitizeHistoryItem).filter(Boolean);
-  const pushed = clean.length ? db.upsertHistory(userId, clean) : 0;
-  const rows = db.listHistorySince(userId, lastSyncAt);
+  const pushed = clean.length ? await db.upsertHistory(userId, clean) : 0;
+  const rows = await db.listHistorySince(userId, lastSyncAt);
   const serverAt = Date.now();
   if (pushed > 0) console.log(`[sync:history] user=${userId} pushed=${pushed} pulled=${rows.length}`);
   return res.json({ ok: true, items: rows.map(toClient), serverAt, pushed });
 });
 
-router.post('/settings', (req, res) => {
+router.post('/settings', async (req, res) => {
   const userId = req.userId;
   const now = Date.now();
   const { updatedAt: clientTs, apikeyEnc, toneStyle, maxLength, temperature } = req.body || {};
-  const user = db.findUserById(userId);
+
+  const user = await db.findUserById(userId);
   if (!user) return res.status(404).json({ ok: false, error: '用户不存在' });
 
   const clientUpdated = Number(clientTs) || 0;
@@ -68,20 +70,18 @@ router.post('/settings', (req, res) => {
     if (Number.isFinite(maxLength) && maxLength > 0) patch.maxLength = Math.min(5000, Math.max(50, Math.round(maxLength)));
     if (Number.isFinite(temperature) && temperature >= 0 && temperature <= 2) patch.temperature = temperature;
     if (apiKeyStored !== undefined) patch.apiKeyEnc = apiKeyStored;
-    db.updateUserSettings(userId, patch);
+    await db.updateUserSettings(userId, patch);
     accepted = true;
   }
 
-  const fresh = db.findUserById(userId);
+  const fresh = await db.findUserById(userId);
   const settings = {
     toneStyle: fresh.tone_style,
     maxLength: fresh.max_length,
     temperature: fresh.temperature,
-    apikeyPlain: (accepted && typeof apikeyEnc === 'string' && apikeyEnc)
-      ? safeDecrypt(fresh.api_key_enc)
-      : null,
+    apikeyPlain: (accepted && typeof apikeyEnc === 'string' && apikeyEnc) ? safeDecrypt(fresh.api_key_enc) : null,
     hasApiKey: !!fresh.api_key_enc,
-    updatedAt: fresh.updated_at,
+    updatedAt: Number(fresh.updated_at),
   };
   return res.json({ ok: true, accepted, settings, serverAt: now });
 });

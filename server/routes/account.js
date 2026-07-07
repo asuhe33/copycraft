@@ -15,21 +15,21 @@ function publicRow(u) {
     maxLength: u.max_length,
     temperature: u.temperature,
     hasApiKey: !!u.api_key_enc,
-    createdAt: u.created_at,
+    createdAt: Number(u.created_at),
   };
 }
 
-router.get('/me', (req, res) => {
-  const user = db.findUserById(req.userId);
+router.get('/me', async (req, res) => {
+  const user = await db.findUserById(req.userId);
   if (!user) return res.status(404).json({ ok: false, error: '用户不存在' });
   return res.json({ ok: true, user: publicRow(user) });
 });
 
-router.delete('/', (req, res) => {
-  const user = db.findUserById(req.userId);
+router.delete('/', async (req, res) => {
+  const user = await db.findUserById(req.userId);
   if (!user) return res.status(404).json({ ok: false, error: '用户不存在' });
-  db.deleteSessionsByUserId(req.userId);
-  db.deleteUserCascade(req.userId);
+  await db.deleteSessionsByUserId(req.userId);
+  await db.deleteUserCascade(req.userId);
   console.log(`[account] 用户已删库 ${user.email} (${req.userId})`);
   return res.json({ ok: true });
 });

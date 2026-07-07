@@ -13,13 +13,17 @@ export function authenticate(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ ok: false, error: 'token 无效或已过期' });
 
-  const session = db.findSession(token);
-  if (!session) return res.status(401).json({ ok: false, error: 'session 已吊销' });
-  if (session.expires_at < Date.now()) {
-    db.deleteSession(token);
-    return res.status(401).json({ ok: false, error: 'session 已过期' });
-  }
-  req.userId = session.user_id;
-  req.sessionToken = token;
-  next();
+  // DB 查 session 是异步；用 async 包装。express 5 支持 async route handler，但这里用 .then 以防 express 4。
+  db.findSession(token).then((session) => {
+    if (!session) return res.status(401).json({ ok: false, error: 'session 已吊销' });
+    if (session.expires_at < Date.now()) {
+      return db.deleteSession(token).then(() => res.status(401).json({ ok: false, error: 'session 已过期' }));
+    }
+    req.userId = session.user_id;
+    req.sessionToken = token;
+    next();
+  }).catch((e) => {
+    console.error('[authenticate] DB 错误:', e);
+    return res.status(500).json({ ok: false, error: '鉴权服务错误' });
+  });
 }
