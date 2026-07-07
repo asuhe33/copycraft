@@ -61,33 +61,40 @@ src/prompts/
 ```
 启用新平台：`constants/platforms.ts` 改 `enabled: true` + `PlatformPicker` 的 `iconMap` 加 emoji。
 
-#### 账户 & 跨设备同步后端（已上线 MVP）
-- `server/`：改用 **ESM**（`package.json` type=module）+ `node:sqlite`（Node 22+，启动需 `--experimental-sqlite`）
-  - `db.js`：sqlite 单文件 DB，表 `users` / `sessions` / `verify_codes` / `history`（联合主键 id+user_id）
-  - `crypto.js`：scrypt 密码哈希 + AES-256-GCM 加密 API Key + HMAC-SHA256 自签 session token
-  - `routes/auth.js`：邮箱 + 6 位数字验证码注册/登录（DEV 模式接口直返验证码）
-  - `routes/sync.js`：历史 + 设置双向同步（`updated_at` 毫秒时间戳**最后写入胜出**，一次往返全双工）
-  - `routes/account.js`：me + 删库跑路
-  - `middleware.js`：`authenticate` 中间件查 sessions 表 + 吊销过期 session
-  - `index.js`：挂载 3 套路由 + `/api/generate` 优先读用户托管 Key（AES 解密）
+#### 账户 & 跨设备同步后端（MySQL 8.0，MVP 已上线）
+- `server/`：**ESM**（`package.json` type=module）+ **mysql2/promise** 连接池（**原 node:sqlite 已移除**）
+  - `db.js`：MySQL 异步 API，导出签名与 sqlite 版一致（下游零改）
+    - history 联合主键 `(user_id, history_id)`；INSERT ... ON DUPLICATE KEY UPDATE + `VALUES(updated_at) >=` 条件 → **最后写入胜出**
+    - deleteUserCascade 用事务 + FK `ON DELETE CASCADE`
+  - `db_init.sql`：`CREATE DATABASE copycraft` + 4 业务表 DDL（InnoDB/utf8mb4）
+  - `db_init.js`：一键跑 db_init.sql 的脚本（`npm run db:init`）
+  - `crypto.js`：scrypt + AES-256-GCM + HMAC-SHA256 session token
+  - `routes/auth.js`：邮箱 + 6 位数字验证码注册/登录（DEV 模式接口直返验证码，详见 `.env.example`）
+  - `routes/sync.js`：历史 + 设置双向同步（一次往返全双工）
+  - `routes/account.js`：me + 删库
+  - `middleware.js`：查 sessions 表 + 吊销过期 session
+  - `index.js`：挂载 + 启动 DB warm-up + 可选 `DB_INIT_BEFORE_BOOT=1` + `/api/generate` Key 优先级分支
 - 前端：
-  - `src/auth/AuthContext.tsx`：token 持久化 + `fetchWithAuth` 401 自动登出 + 启动刷新 me
-  - `src/api/auth.ts` + `api/sync.ts`：网络层
-  - `src/hooks/useSync.ts`：订阅 history 变更事件 → debounce 推送 + 登录首启全量 + visibilitychange 拉一次
-  - `src/hooks/useHistory.ts`：add/update/remove 发出 module-level 事件（与 useSync 解耦）
-  - `src/components/business/auth/LoginForm.tsx`：邮箱 + 验证码 + 密码（MVP dev 弹窗显示验证码）
-  - `pages/SettingsPage.tsx`："账户与同步"区块（托管 API Key / 同步状态 / 立即同步 / 登出 / 删库）
+  - `src/auth/AuthContext.tsx` / `src/api/auth.ts` + `api/sync.ts`
+  - `src/hooks/useSync.ts`：订阅 history 变更事件 → debounce 推送 + 登录首启全量 + visibilitychange
+  - `src/hooks/useHistory.ts`：add/update/remove 发 module-level 事件
+  - `src/components/business/auth/LoginForm.tsx`：邮箱+验证码+密码（MVP dev 弹窗显示验证码）
+  - `pages/SettingsPage.tsx`："账户与同步"区块（云 Key 托管/同步状态/登出/删库）
   - `vite.config.ts`：`/api` proxy → `localhost:3001`
   - `src/types/copy.ts`：加 `updatedAt?: number`
-- 后端要求的环境变量：`JWT_SECRET`（必填）/ `DB_PATH` / `VERIFY_CODE_TTL` / `SESSION_TTL`
-- 测试脚本：`scripts/e2e-backend.mjs`（16 项后端检查）/ `scripts/e2e-full.mjs`（含注册→删库）
+- 连接配置（环境变量 / `.env`，`.env.example` 含完整引导）：
+  - `JWT_SECRET`（**必填**，>=32 位随机串）
+  - `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`
+  - `VERIFY_CODE_TTL` / `SESSION_TTL` / `DB_INIT_BEFORE_BOOT`（可选）
+- 测试脚本：`scripts/e2e-mysql.mjs`（MySQL 9/9 PASS，**已实测用户本机 root@3307**）
 ```
-npm run server                              # 起后端（3001 端口，已加 --experimental-sqlite）
-npm run dev                                 # 起前端（5173，会自动 proxy /api → 3001）
-JWT_SECRET=x npm run server                  # 最简启动
-VITE_USE_BACKEND=true npm run dev            # 前端走后端代理（否则前端直连 DeepSeek）
+npm run db:init                                # 一次性建库+建表（DB_PASSWORD=123456 npm run db:init）
+npm run server                                 # 起后端（3001 端口；已去掉 --experimental-sqlite）
+npm run dev                                    # 起前端（5173，/api → 3001）
+DB_INIT_BEFORE_BOOT=1 npm run server            # 首次：自动建库 + 起服务
+JWT_SECRET=$(openssl rand -hex 32) npm run server  # 生成强 secret 启动
 ```
-> 初始化数据库：第一次启动时自动建表 + mkdir server/data；生产数据在 `server/data/copycraft.db`（已 gitignore）
+> 配置：复制 `.env.example` 为 `.env` 填入 MySQL 连接信息；已通过 127.0.0.1:3307 用户真实 MySQL 联调验证
 
 ## 5. 目录结构
 
@@ -95,16 +102,18 @@ VITE_USE_BACKEND=true npm run dev            # 前端走后端代理（否则前
 copycraft-mvp-v1.0.0/
 ├── .github/workflows/deploy.yml  ← Pages 自动部署（push main 触发）
 ├── scripts/                      ← 联调脚本
-│   ├── e2e-backend.mjs           ← 后端 16 项全链路检查
-│   └── e2e-full.mjs              ← 注册→托管 Key→同步→删库完整流
-├── server/                       ← 后端（Express + node:sqlite，ESM）
-│   ├── index.js                  ← 入口：挂载 + /api/generate Key 优先级
-│   ├── db.js                     ← sqlite schema + CRUD
+│   ├── e2e-mysql.mjs             ← MySQL 9/9 全链路（已实测用户本机 3307）
+│   ├── e2e-backend.mjs           ← 后端 16 项全链路检查（sqlite 版，保留）
+│   └── e2e-full.mjs              ← 注册→托管 Key→同步→删库完整流（sqlite 版，保留）
+├── server/                       ← 后端（Express + mysql2 连接池，ESM）
+│   ├── index.js                  ← 入口：挂载 + DB warmup + /api/generate Key 优先级
+│   ├── db.js                     ← mysql2/promise 异步 API（签名与 sqlite 版完全一致）
+│   ├── db_init.sql               ← 4 业务表 DDL（InnoDB/utf8mb4；首次部署用）
+│   ├── db_init.js                ← 一键 schema 部署脚本（npm run db:init）
 │   ├── crypto.js                 ← scrypt + AES-256-GCM + HMAC token
 │   ├── mailer.js                 ← DEV 模式返回验证码（PROD 扩展位）
-│   ├── middleware.js             ← authenticate 中间件
-│   ├── routes/                   ← auth / sync / account
-│   └── data/                     ← 运行时 sqlite DB（gitignore）
+│   ├── middleware.js             ← authenticate 中间件（session 表可吊销）
+│   └── routes/                   ← auth / sync / account
 ├── public/
 │   ├── sw.js                     ← Service Worker v2
 │   ├── manifest.webmanifest      ← PWA 主配置
