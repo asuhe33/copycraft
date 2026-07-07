@@ -61,35 +61,65 @@ src/prompts/
 ```
 启用新平台：`constants/platforms.ts` 改 `enabled: true` + `PlatformPicker` 的 `iconMap` 加 emoji。
 
-#### 后端代理模式（已搭好基础，Experimental）
-- `server/index.js`：Express 代理 DeepSeek + `/api/health` 健康检查
-- `src/api/deepseek.ts`：`USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true'` 开关
+#### 账户 & 跨设备同步后端（已上线 MVP）
+- `server/`：改用 **ESM**（`package.json` type=module）+ `node:sqlite`（Node 22+，启动需 `--experimental-sqlite`）
+  - `db.js`：sqlite 单文件 DB，表 `users` / `sessions` / `verify_codes` / `history`（联合主键 id+user_id）
+  - `crypto.js`：scrypt 密码哈希 + AES-256-GCM 加密 API Key + HMAC-SHA256 自签 session token
+  - `routes/auth.js`：邮箱 + 6 位数字验证码注册/登录（DEV 模式接口直返验证码）
+  - `routes/sync.js`：历史 + 设置双向同步（`updated_at` 毫秒时间戳**最后写入胜出**，一次往返全双工）
+  - `routes/account.js`：me + 删库跑路
+  - `middleware.js`：`authenticate` 中间件查 sessions 表 + 吊销过期 session
+  - `index.js`：挂载 3 套路由 + `/api/generate` 优先读用户托管 Key（AES 解密）
+- 前端：
+  - `src/auth/AuthContext.tsx`：token 持久化 + `fetchWithAuth` 401 自动登出 + 启动刷新 me
+  - `src/api/auth.ts` + `api/sync.ts`：网络层
+  - `src/hooks/useSync.ts`：订阅 history 变更事件 → debounce 推送 + 登录首启全量 + visibilitychange 拉一次
+  - `src/hooks/useHistory.ts`：add/update/remove 发出 module-level 事件（与 useSync 解耦）
+  - `src/components/business/auth/LoginForm.tsx`：邮箱 + 验证码 + 密码（MVP dev 弹窗显示验证码）
+  - `pages/SettingsPage.tsx`："账户与同步"区块（托管 API Key / 同步状态 / 立即同步 / 登出 / 删库）
+  - `vite.config.ts`：`/api` proxy → `localhost:3001`
+  - `src/types/copy.ts`：加 `updatedAt?: number`
+- 后端要求的环境变量：`JWT_SECRET`（必填）/ `DB_PATH` / `VERIFY_CODE_TTL` / `SESSION_TTL`
+- 测试脚本：`scripts/e2e-backend.mjs`（16 项后端检查）/ `scripts/e2e-full.mjs`（含注册→删库）
 ```
-npm run server           # 启动后端（默认 3001 端口）
-npm run dev:full         # 同时启动后端 + 前端
-VITE_USE_BACKEND=true npm run dev   # 前端走后端代理
+npm run server                              # 起后端（3001 端口，已加 --experimental-sqlite）
+npm run dev                                 # 起前端（5173，会自动 proxy /api → 3001）
+JWT_SECRET=x npm run server                  # 最简启动
+VITE_USE_BACKEND=true npm run dev            # 前端走后端代理（否则前端直连 DeepSeek）
 ```
-环境变量：`DEEPSEEK_API_KEY` / `PORT`
+> 初始化数据库：第一次启动时自动建表 + mkdir server/data；生产数据在 `server/data/copycraft.db`（已 gitignore）
 
 ## 5. 目录结构
 
 ```
 copycraft-mvp-v1.0.0/
 ├── .github/workflows/deploy.yml  ← Pages 自动部署（push main 触发）
-├── server/index.js               ← 后端代理（Express）
+├── scripts/                      ← 联调脚本
+│   ├── e2e-backend.mjs           ← 后端 16 项全链路检查
+│   └── e2e-full.mjs              ← 注册→托管 Key→同步→删库完整流
+├── server/                       ← 后端（Express + node:sqlite，ESM）
+│   ├── index.js                  ← 入口：挂载 + /api/generate Key 优先级
+│   ├── db.js                     ← sqlite schema + CRUD
+│   ├── crypto.js                 ← scrypt + AES-256-GCM + HMAC token
+│   ├── mailer.js                 ← DEV 模式返回验证码（PROD 扩展位）
+│   ├── middleware.js             ← authenticate 中间件
+│   ├── routes/                   ← auth / sync / account
+│   └── data/                     ← 运行时 sqlite DB（gitignore）
 ├── public/
 │   ├── sw.js                     ← Service Worker v2
 │   ├── manifest.webmanifest      ← PWA 主配置
 │   └── icons/icon.svg            ← PWA 图标
 ├── src/
 │   ├── api/deepseek.ts           ← 流式生成 + Key 校验（含后端代理分支）
+│   ├── api/                      ← auth/sync 网络层
+│   ├── auth/                     ← AuthContext（token/me/refetchMe）
 │   ├── components/
 │   │   ├── atoms/                ← Button/Input/Select/Textarea/Toggle/Spinner
-│   │   ├── business/             ← ResultCard/ResultList/CopyInputPanel/PlatformPicker/ConfigPanel/KeyManager
+│   │   ├── business/             ← ResultCard/ResultList/CopyInputPanel/PlatformPicker/ConfigPanel/KeyManager/auth/LoginForm
 │   │   └── layout/               ← Header/Footer/PageContainer
 │   ├── constants/                ← routes/platforms/defaults
 │   ├── context/                  ← AppContext + appReducer
-│   ├── hooks/                    ← useGenerate/useCopy/useHistory
+│   ├── hooks/                    ← useGenerate/useCopy/useHistory/useSync
 │   ├── pages/                    ← HomePage/HistoryPage/SettingsPage
 │   ├── prompts/                  ← index(工厂) + 4 平台模板
 │   ├── types/                    ← platform/copy
@@ -156,12 +186,17 @@ git push origin main          # SSH，不要用 HTTPS
 
 按产品价值排序：
 
-1. **跨设备历史同步后端**（Express + SQLite + GitHub OAuth 登录）⬅️ 用户已明确需要
-2. **多平台扩写 UI 开放**（weibo/douyin/gongzhonghao 的 enabled:true + PlatformPicker 加 emoji）
-3. **模板系统**（保存常用输入组合为可复用模板）
-4. **导出/导入历史备份文件**（零后端，用户手动迁移，跨设备过渡方案）
-5. **桌面 EXE 打包**（Tauri，~10MB）
-6. **Android APK**（Capacitor）
+1. ~~**跨设备历史同步后端**~~ ← ✅ 已完成（邮箱 + JWT session + node:sqlite + 最后写入胜出）
+2. ~~**多平台扩写 UI 开放**~~ ← ✅ 已完成（微博/抖音/公众号 enabled:true，复用 deepseek-chat）
+3. **邮件通道 PROD 化**（mailer.js 接 Resend/OTP；settings 中加"email verify/改绑"）
+4. **历史软删同步闭环**（当前 remove 是本地硬删，需补 `deleted` payload 让服务端也软删以免重生）
+5. **模板系统**（保存常用输入组合为可复用模板，与 history 表联合托管）
+6. **Key 跨端 E2E 加密**（当前同 session 发明文，多设备应走端到端加密）
+7. **公网部署**（Render/Fly.io/自有 VPS；JWT_SECRET 必须独立；DB 定期备份）
+8. **模板系统**（保存常用输入组合）
+9. **导出/导入历史备份文件**（零后端，手动迁移，轻量过渡方案）
+10. **桌面 EXE 打包**（Tauri，~10MB）
+11. **Android APK**（Capacitor）
 
 ## 9. 调试命令速查
 
