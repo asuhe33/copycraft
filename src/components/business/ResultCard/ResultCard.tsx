@@ -3,12 +3,17 @@ import { Button } from '@/components/atoms/Button';
 import { useAppContext } from '@/context';
 import { useCopy } from '@/hooks/useCopy';
 import { useHistory } from '@/hooks/useHistory';
-import { exportMarkdown, exportText } from '@/utils/export';
+import {
+  exportMarkdown,
+  exportText,
+  exportMarkdownPicker,
+  exportTextPicker,
+  supportsDirectoryPicker,
+} from '@/utils/export';
 import type { CopyResult, PlatformId } from '@/types';
 
 interface Props {
   result: CopyResult;
-  /** 删除回调（父组件决定如何同步 reducer / history） */
   onDelete?: (id: string) => void;
 }
 
@@ -34,8 +39,10 @@ export function ResultCard({ result, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(result.content);
   const [copiedText, setCopiedText] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const wordCount = result.content.length;
+  const canSaveToDir = supportsDirectoryPicker();
 
   const handleCopy = async () => {
     const ok = await copy(result.content);
@@ -45,7 +52,6 @@ export function ResultCard({ result, onDelete }: Props) {
     }
   };
 
-  // 编辑保存 → 同步 reducer + history
   const handleSave = () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
@@ -58,6 +64,21 @@ export function ResultCard({ result, onDelete }: Props) {
     if (!window.confirm('确定要删除这条生成结果吗？')) return;
     dispatch({ type: 'RESULT_DELETE', payload: result.id });
     onDelete?.(result.id);
+  };
+
+  // 导出到指定目录（File System Access API）
+  const handleExportMdPicker = async () => {
+    setExporting(true);
+    const ok = await exportMarkdownPicker(result);
+    setExporting(false);
+    if (!ok) alert('导出失败或被取消');
+  };
+
+  const handleExportTxtPicker = async () => {
+    setExporting(true);
+    const ok = await exportTextPicker(result);
+    setExporting(false);
+    if (!ok) alert('导出失败或被取消');
   };
 
   return (
@@ -105,18 +126,44 @@ export function ResultCard({ result, onDelete }: Props) {
             <Button size="sm" variant="secondary" onClick={handleCopy}>
               {copiedText || copied ? '✓ 已复制' : '📋 复制'}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => exportMarkdown(result)}>
-              ⬇️ MD
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => exportText(result)}>
-              ⬇️ TXT
-            </Button>
+
+            {/* 导出到目录（File System Access）—— PWA/桌面浏览器 */}
+            {canSaveToDir && (
+              <>
+                <Button size="sm" variant="secondary" onClick={handleExportMdPicker} loading={exporting}>
+                  💾 存 MD
+                </Button>
+                <Button size="sm" variant="secondary" onClick={handleExportTxtPicker} loading={exporting}>
+                  💾 存 TXT
+                </Button>
+              </>
+            )}
+
+            {/* 传统下载 —— 移动端 Safari / 旧浏览器 */}
+            {!canSaveToDir && (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => exportMarkdown(result)}>
+                  ⬇️ MD
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => exportText(result)}>
+                  ⬇️ TXT
+                </Button>
+              </>
+            )}
+
             <Button size="sm" variant="danger" onClick={handleDelete}>
               🗑 删除
             </Button>
           </>
         )}
       </div>
+
+      {/* 保存到文件提示 */}
+      {canSaveToDir && !editing && (
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-right">
+          💡 支持「存 MD/TXT」选择本地目录保存
+        </p>
+      )}
     </div>
   );
 }

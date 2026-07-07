@@ -1,0 +1,21 @@
+{
+  "name": "CopyCraft · 文案魔匠",
+  "short_name": "CopyCraft",
+  "description": "多平台文案适配分发工具，AI 一键生成小红书/微博/抖音/公众号文案",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#ff4d6d",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
