@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import { AppProvider } from './context';
+import { AuthProvider } from './auth/AuthContext';
 import './index.css';
 
 // 错误边界：任何渲染异常都不应该让整个页面白屏
@@ -70,9 +71,11 @@ class ErrorBoundary extends React.Component<
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <AppProvider>
-        <App />
-      </AppProvider>
+      <AuthProvider>
+        <AppProvider>
+          <App />
+        </AppProvider>
+      </AuthProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

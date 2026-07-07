@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "type-check": "tsc -b --noEmit",
-    "server": "node server/index.js",
+    "server": "node --experimental-sqlite server/index.js",
     "dev:full": "concurrently \"npm:server\" \"npm:dev\""
   },
   "dependencies": {

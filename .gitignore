@@ -31,6 +31,12 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
+# 本地 sqlite 数据（用户数据、历史、session）
+server/data/
+*.db
+*.db-wal
+*.db-shm
+
 # TypeScript
 *.tsbuildinfo
 next-out/
