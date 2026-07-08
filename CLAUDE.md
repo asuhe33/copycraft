@@ -35,6 +35,7 @@
 | 邮件 | nodemailer@7（SMTP + Resend 双后端，opt-in）|
 | 前端存储 | localStorage（Key 脱敏、历史最多 100 条）|
 | 后端（框架已搭）| Express + CORS + nodemailer@7（可选启用）|
+| 桌面单机版 | Electron 34 + electron-builder（VITE_MODE=desktop，屏蔽同步/注册）|
 | 部署 | GitHub Pages via GitHub Actions workflow |
 
 ## 4. 已完成功能
@@ -125,6 +126,8 @@ copycraft-mvp-v1.0.0/
 │   ├── e2e-auth-mailer.mjs       ← auth + mailer 集成（需 MySQL 3307）
 │   ├── e2e-backend.mjs           ← 后端 16 项全链路检查（sqlite 版，保留）
 │   └── e2e-full.mjs              ← 注册→托管 Key→同步→删库完整流（sqlite 版，保留）
+├── electron/                     ← 桌面单机版主进程（main.cjs + preload.cjs）
+├── electron-builder.yml          ← electron-builder 配置（Windows portable）
 ├── server/                       ← 后端（Express + mysql2 连接池，ESM）
 │   ├── index.js                  ← 入口：挂载 + DB warmup + /api/generate Key 优先级
 │   ├── db.js                     ← mysql2/promise 异步 API（签名与 sqlite 版完全一致）
@@ -272,8 +275,9 @@ git push origin main          # SSH，不要用 HTTPS
 7. **公网部署**（VPS / Render / Fly.io；JWT_SECRET 必须独立；DB 定期备份）
 8. **模板系统**（保存常用输入组合，与 history 表联合托管）
 9. **导出/导入历史备份文件**（零后端，手动迁移，轻量过渡方案）
-10. **桌面 EXE 打包**（Tauri，~10MB）
+10. ~~**桌面 EXE 打包**~~ ← ✅ 已完成（Electron 34，115MB zip / 182MB exe；签名待证书）
 11. **Android APK**（Capacitor）
+12. **Tauri 迁移**（Electron → Tauri v8，~5MB；待 v8 文档可访问后）
 
 ## 9. 调试命令速查
 
@@ -289,6 +293,13 @@ npm run dev                # 前端直连 DeepSeek（用户自备 Key）
 npm run server             # 后端代理（可选）
 npm run dev:full           # 同时启后端 + 前端
 VITE_USE_BACKEND=true npm run dev   # 前端走后端
+npm run electron:dev                # 桌面版开发（需手动重启，无 HMR）
+npm run electron:build              # 打包：先 build:desktop，再 electron-builder
+PowerShell -File scripts/package-desktop-zip.ps1  # win-unpacked → zip
+产物位置：
+  release/win-unpacked/CopyCraft.exe（182MB 单文件）
+  release/CopyCraft-0.1.0-win-portable.zip（115MB，双击 exe 解压缩后运行）
+桌面版限制：同步/注册/云 Key UI 已屏蔽；用户自备 DeepSeek Key 直连
 
 # GitHub Actions 状态
 gh run list --limit 3
