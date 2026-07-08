@@ -32,8 +32,9 @@
 | 路由 | React Router 6（**HashRouter**，静态托管友好）|
 | 状态 | useContext + useReducer |
 | AI | DeepSeek `deepseek-chat`（OpenAI-compatible 流式 SSE）|
+| 邮件 | nodemailer@7（SMTP + Resend 双后端，opt-in）|
 | 前端存储 | localStorage（Key 脱敏、历史最多 100 条）|
-| 后端（框架已搭）| Express + CORS（可选启用）|
+| 后端（框架已搭）| Express + CORS + nodemailer@7（可选启用）|
 | 部署 | GitHub Pages via GitHub Actions workflow |
 
 ## 4. 已完成功能
@@ -86,15 +87,32 @@ src/prompts/
   - `JWT_SECRET`（**必填**，>=32 位随机串）
   - `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`
   - `VERIFY_CODE_TTL` / `SESSION_TTL` / `DB_INIT_BEFORE_BOOT`（可选）
-- 测试脚本：`scripts/e2e-mysql.mjs`（MySQL 9/9 PASS，**已实测用户本机 root@3307**）
+- 邮件通道（PROD，**opt-in**；默认不配邮件变量 = DEV 模式验证码返前端弹窗）：
+  - `server/mailer.js`：**双后端**：
+    - SMTP（nodemailer@7）：`EMAIL_SMTP_URI=smtps://user:pass@smtp.example.com:465`
+    - Resend（API-first）：`EMAIL_PROVIDER=resend` + `RESEND_API_KEY=re_xxx`
+    - `MAIL_FROM`（默认 `CopyCraft <no-reply@copycraft.app>`）
+    - `EMAIL_COOLDOWN_MS`（默认 60000）：同一邮箱两次发码最小间隔，防邮件轰炸
+    - 内存防护：节流表 > 1000 条自动 GC
+    - **日志脱敏**：prod 下不输出 email/code；仅 `mailer:dev` 模式打日志
+    - `smtpProbe()`：通道自检（smtp 模式 verify；dev 模式 ok:true）
+  - `server/routes/auth.js`：`request-code` 失败分级响应：
+    - `CooldownError` → `429` + `{ retryAfter }`（前端提示等待秒数）
+    - 其他邮件通道异常 → `502` + 友好中文（真实 stack 留 server 日志）
+  - 前端 **零改造**（`devOnly` 分支保留弹窗；PROD 分支进入"验证码已下发"提示）
+- 测试脚本：
+  - `scripts/e2e-mysql.mjs`（MySQL 9/9 PASS，**已实测用户本机 root@3307**）
+  - `scripts/e2e-mailer.mjs`（mailer 4/4 PASS：dev / smtp jsonTransport / 节流 / 失败传播）
+  - `scripts/e2e-auth-mailer.mjs`（auth + mailer 集成，需 MySQL 3307）
 ```
 npm run db:init                                # 一次性建库+建表（DB_PASSWORD=123456 npm run db:init）
 npm run server                                 # 起后端（3001 端口；已去掉 --experimental-sqlite）
 npm run dev                                    # 起前端（5173，/api → 3001）
 DB_INIT_BEFORE_BOOT=1 npm run server            # 首次：自动建库 + 起服务
 JWT_SECRET=$(openssl rand -hex 32) npm run server  # 生成强 secret 启动
+node scripts/e2e-mailer.mjs                    # 邮件通道 4/4 PASS（无需 DB）
 ```
-> 配置：复制 `.env.example` 为 `.env` 填入 MySQL 连接信息；已通过 127.0.0.1:3307 用户真实 MySQL 联调验证
+> 配置：复制 `.env.example` 为 `.env` 填入 MySQL / 邮件连接信息；已通过 127.0.0.1:3307 用户真实 MySQL 联调验证
 
 ## 5. 目录结构
 
@@ -103,6 +121,8 @@ copycraft-mvp-v1.0.0/
 ├── .github/workflows/deploy.yml  ← Pages 自动部署（push main 触发）
 ├── scripts/                      ← 联调脚本
 │   ├── e2e-mysql.mjs             ← MySQL 9/9 全链路（已实测用户本机 3307）
+│   ├── e2e-mailer.mjs            ← mailer 4/4 PASS（dev/smtp/节流/失败传播，无需 DB）
+│   ├── e2e-auth-mailer.mjs       ← auth + mailer 集成（需 MySQL 3307）
 │   ├── e2e-backend.mjs           ← 后端 16 项全链路检查（sqlite 版，保留）
 │   └── e2e-full.mjs              ← 注册→托管 Key→同步→删库完整流（sqlite 版，保留）
 ├── server/                       ← 后端（Express + mysql2 连接池，ESM）
@@ -246,7 +266,7 @@ git push origin main          # SSH，不要用 HTTPS
 1. ~~**跨设备历史同步后端**~~ ← ✅ 已完成（邮箱 + JWT session + MySQL 8.0 连接池 + 最后写入胜出）
 2. ~~**多平台扩写 UI 开放**~~ ← ✅ 已完成（微博/抖音/公众号 enabled:true，复用 deepseek-chat）
 3. ~~**后端迁移 MySQL 8.0**~~ ← ✅ 已完成（node:sqlite → mysql2，保留签名零破坏）
-4. **邮件通道 PROD**（mailer.js 接 Resend/nodemailer，不再直返验证码）
+4. ~~**邮件通道 PROD**~~ ← ✅ 已完成（nodemailer@7 双后端 SMTP/Resend，opt-in，4/4 e2e PASS）
 5. **历史软删同步闭环**（当前 remove 是本地硬删，需补 `deleted` payload 让服务端也软删以免重生）
 6. **Key 跨端 E2E 加密**（当前同 session 发明文，多设备应走端到端加密）
 7. **公网部署**（VPS / Render / Fly.io；JWT_SECRET 必须独立；DB 定期备份）
