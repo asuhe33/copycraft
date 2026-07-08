@@ -32,9 +32,9 @@
 | 路由 | React Router 6（**HashRouter**，静态托管友好）|
 | 状态 | useContext + useReducer |
 | AI | DeepSeek `deepseek-chat`（OpenAI-compatible 流式 SSE）|
-| 邮件 | nodemailer@7（SMTP + Resend 双后端，opt-in）|
+| 邮件 | nodemailer@8（SMTP + Resend 双后端，opt-in）|
 | 前端存储 | localStorage（Key 脱敏、历史最多 100 条）|
-| 后端（框架已搭）| Express + CORS + nodemailer@7（可选启用）|
+| 后端（框架已搭）| Express + CORS + nodemailer@8（可选启用）|
 | 桌面单机版 | Electron 34 + electron-builder（VITE_MODE=desktop，屏蔽同步/注册）|
 | 部署 | GitHub Pages via GitHub Actions workflow |
 
@@ -96,7 +96,7 @@ src/prompts/
     - deleteUserCascade 用事务 + FK `ON DELETE CASCADE`
   - `db_init.sql`：`CREATE DATABASE copycraft` + 4 业务表 DDL（InnoDB/utf8mb4）
   - `db_init.js`：一键跑 db_init.sql 的脚本（`npm run db:init`）
-  - `crypto.js`：scrypt + AES-256-GCM + HMAC-SHA256 session token
+  - `crypto.js`：scrypt + AES-256-GCM + HMAC-SHA256 + HKDF-SHA256（派生独立 AES 密钥）
   - `routes/auth.js`：邮箱 + 6 位数字验证码注册/登录（DEV 模式接口直返验证码，详见 `.env.example`）
   - `routes/sync.js`：历史 + 设置双向同步（一次往返全双工）
   - `routes/account.js`：me + 删库
@@ -116,7 +116,7 @@ src/prompts/
   - `VERIFY_CODE_TTL` / `SESSION_TTL` / `DB_INIT_BEFORE_BOOT`（可选）
 - 邮件通道（PROD，**opt-in**；默认不配邮件变量 = DEV 模式验证码返前端弹窗）：
   - `server/mailer.js`：**双后端**：
-    - SMTP（nodemailer@7）：`EMAIL_SMTP_URI=smtps://user:pass@smtp.example.com:465`
+    - SMTP（nodemailer@8）：`EMAIL_SMTP_URI=smtps://user:pass@smtp.example.com:465`
     - Resend（API-first）：`EMAIL_PROVIDER=resend` + `RESEND_API_KEY=re_xxx`
     - `MAIL_FROM`（默认 `CopyCraft <no-reply@copycraft.app>`）
     - `EMAIL_COOLDOWN_MS`（默认 60000）：同一邮箱两次发码最小间隔，防邮件轰炸
@@ -159,8 +159,8 @@ copycraft-mvp-v1.0.0/
 │   ├── db.js                     ← mysql2/promise 异步 API（签名与 sqlite 版完全一致）
 │   ├── db_init.sql               ← 4 业务表 DDL（InnoDB/utf8mb4；首次部署用）
 │   ├── db_init.js                ← 一键 schema 部署脚本（npm run db:init）
-│   ├── crypto.js                 ← scrypt + AES-256-GCM + HMAC token
-│   ├── mailer.js                 ← DEV 模式返回验证码（PROD 扩展位）
+│   ├── crypto.js                 ← scrypt + AES-256-GCM + HMAC + HKDF-SHA256
+│   ├── mailer.js                 ← nodemailer@8（SMTP + Resend 双后端，opt-in）
 │   ├── middleware.js             ← authenticate 中间件（session 表可吊销）
 │   └── routes/                   ← auth / sync / account
 ├── public/
@@ -182,9 +182,10 @@ copycraft-mvp-v1.0.0/
 │   ├── prompts/                  ← index(工厂) + 4 平台模板
 │   ├── types/                    ← platform/copy
 │   └── utils/                    ← export/crypto
+├── docs/TESTING.md               ← 完整测试文档（43/43 PASS，2026-07-08）
 ├── CLAUDE.md                     # 本文件
-├── vite.config.ts                ← base:'./'，避免子路径资源 404
-└── package.json                  ← 含 express/cors 后端依赖
+├── vite.config.ts                ← base:'./' + VITE_MODE=desktop define + /api proxy
+└── package.json                  ← 含 express/cors/electron/nodemailer 后端依赖
 ```
 
 ## 6. 关键约定（必读）
@@ -286,7 +287,8 @@ git push origin main          # SSH，不要用 HTTPS
 
 - ~~**刷新页面后历史丢失**~~ ← ✅ 已通过 MySQL 云同步解决（MVP）
 - ~~**跨设备同步需求**~~ ← ✅ 已实现（邮箱+JWT+MySQL 最后写入胜出）
-- **导出到指定目录**：已实现 File System Access API（PC Chrome/Edge PWA 体验佳，Safari 降级为传统下载）
+- ~~**导出到指定目录**~~ ← 已实现 File System Access API（PC Chrome/Edge PWA 体验佳，Safari 降级为传统下载）
+- **依赖漏洞**：esbuild moderate（仅 dev server，不修）；nodemailer 2 高危（利用路径不触发，已升 8.x）；详见 `docs/TESTING.md`
 
 ## 8. 下一步候选（待用户选择）
 
@@ -295,7 +297,7 @@ git push origin main          # SSH，不要用 HTTPS
 1. ~~**跨设备历史同步后端**~~ ← ✅ 已完成（邮箱 + JWT session + MySQL 8.0 连接池 + 最后写入胜出）
 2. ~~**多平台扩写 UI 开放**~~ ← ✅ 已完成（微博/抖音/公众号 enabled:true，复用 deepseek-chat）
 3. ~~**后端迁移 MySQL 8.0**~~ ← ✅ 已完成（node:sqlite → mysql2，保留签名零破坏）
-4. ~~**邮件通道 PROD**~~ ← ✅ 已完成（nodemailer@7 双后端 SMTP/Resend，opt-in，4/4 e2e PASS）
+4. ~~**邮件通道 PROD**~~ ← ✅ 已完成（nodemailer@8 双后端 SMTP/Resend，opt-in，4/4 e2e PASS）
 5. **历史软删同步闭环**（当前 remove 是本地硬删，需补 `deleted` payload 让服务端也软删以免重生）
 6. **Key 跨端 E2E 加密**（当前同 session 发明文，多设备应走端到端加密）
 7. **公网部署**（VPS / Render / Fly.io；JWT_SECRET 必须独立；DB 定期备份）
