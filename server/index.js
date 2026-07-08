@@ -40,8 +40,23 @@ async function maybeBootstrap() {
   }
 }
 
+// CORS 白名单：默认仅允许 localhost（前端 dev server / Tauri WebView / PWA 同域）。
+// 公网部署时设 CORS_ORIGIN=https://your-domain.com （逗号分隔多个）
+const CORS_RAW = process.env.CORS_ORIGIN || '';
+const CORS_LIST = CORS_RAW
+  ? CORS_RAW.split(',').map(s => s.trim()).filter(Boolean)
+  : ['http://localhost:5173', 'http://localhost:4173', 'http://localhost:3001', 'tauri://localhost'];
+
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: function (origin, cb) {
+    // 允许无 origin 的请求（桌面端 Tauri WebView、curl、PWA 同域）
+    if (!origin) return cb(null, true);
+    if (CORS_LIST.includes(origin)) return cb(null, true);
+    cb(new Error('CORS policy: origin ' + origin + ' not allowed'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', async (req, res) => {

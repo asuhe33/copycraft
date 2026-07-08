@@ -36,10 +36,9 @@ router.post('/request-code', async (req, res) => {
   const email = String(rawEmail || '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return res.status(400).json({ ok: false, error: '邮箱格式不正确' });
   if (mode !== 'register' && mode !== 'login') return res.status(400).json({ ok: false, error: 'mode 必须为 register 或 login' });
-  const existing = await db.findUserByEmail(email);
-  if (mode === 'register' && existing) return res.status(409).json({ ok: false, error: '该邮箱已注册，请直接登录' });
-  if (mode === 'login' && !existing) return res.status(404).json({ ok: false, error: '该邮箱未注册' });
-
+  // 防 email 枚举：/login 与 /register 阶段不揭示邮箱是否存在 ——
+  // 只要邮箱格式合法就生成验证码下发；账户存在性校验延后到 /verify-code。
+  // 代价：对不存在的邮箱也会消耗一次验证码配额（TTL 600s + 错误 5 次失效兜底，防滥用足够）。
   const code = generateVerifyCode();
   const now = Date.now();
   await db.saveVerifyCode({ email, code, expiresAt: now + VERIFY_CODE_TTL, createdAt: now });
