@@ -2,9 +2,13 @@
 node_modules/
 package-lock.json.bak
 
-# 构建产物（保留 dist/ 用于直接部署，但忽略本地调试产物）
+# 构建产物（GitHub Actions 生成 dist/ 部署到 Pages；electron-builder 在 release/）
+dist/
+release/
 dev-dist/
 *.local
+# 桌面版 exe（单文件 182 MB，留本地用但不入库）
+CopyCraft-*.exe
 
 # 编辑器
 .vscode/*

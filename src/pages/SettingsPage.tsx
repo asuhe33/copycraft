@@ -12,6 +12,7 @@ import { maskApiKey, loadFromStorage, saveToStorage } from '@/utils/crypto';
 import { validateKey } from '@/api/deepseek';
 import { deleteAccount } from '@/api/auth';
 import { LoginForm } from '@/components/business/auth/LoginForm';
+import { IS_DESKTOP } from '@/constants/routes';
 
 const STORAGE_KEY = 'copycraft_api_key';
 const LS_SETTINGS_UPDATED_AT = 'copycraft_settings_updated_at';
@@ -139,13 +140,15 @@ export function SettingsPage() {
             </div>
           </section>
 
-          {/* ---------- 账户与同步 ---------- */}
-          <section className="pt-6 border-t border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span>☁️</span> 账户与同步
-            </h2>
-            <AccountSync />
-          </section>
+          {/* ---------- 账户与同步（桌面单机版屏蔽） ---------- */}
+          {!IS_DESKTOP && (
+            <section className="pt-6 border-t border-gray-100 dark:border-gray-700">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>☁️</span> 账户与同步
+              </h2>
+              <AccountSync />
+            </section>
+          )}
 
           <section className="pt-6 border-t border-gray-100 dark:border-gray-700">
             <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
@@ -155,7 +158,7 @@ export function SettingsPage() {
               <p>CopyCraft · 文案魔匠 v0.1.0</p>
               <p>当前接入模型：DeepSeek（deepseek-chat）</p>
               <p>当前适配平台：微博 / 抖音 / 公众号 / 小红书</p>
-              <p>数据存储：本地 localStorage（可同步到云端）</p>
+              <p>数据存储：本地 localStorage{IS_DESKTOP ? '（桌面单机版）' : '（可同步到云端）'}</p>
               <p className="text-xs pt-2">Vibe Coding · MVP 阶段 · 请勿输入 PII 内容</p>
             </div>
           </section>

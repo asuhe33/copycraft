@@ -1,0 +1,55 @@
+# electron-builder 配置（CopyCraft 桌面单机版）
+# 文档：https://www.electron.build/configuration/configuration
+#
+# 产物：
+#   - Windows portable：copycraft-0.1.0.exe（单文件，无需安装，双击即走）
+#   - Windows NSIS 安装包：copycraft-Setup-0.1.0.exe（可选）
+#
+# 运行：npm run electron:build
+
+appId: com.copycraft.mvp
+productName: CopyCraft
+copyright: Copyright © 2026 asuhe33
+
+# 资源目录（Vite 构建产物）
+directories:
+  output: release
+  buildResources: public
+
+# 文件包含规则
+files:
+  - dist/**/*
+  - electron/*
+  - public/icons/**/*
+  - package.json
+
+# Windows 配置
+win:
+  icon: public/icons/icon.svg
+  # sign: false — 无 Windows 代码签名证书时强制跳过签名
+  # 影响：首次运行时 Windows SmartScreen 弹窗提示"未知 publisher"，点"仍要运行"即可
+  # 购买证书（如 Sectigo / DigiCert）后改为 cosine 签名配置即可消除弹窗
+  sign: false
+  target:
+    - target: portable
+      arch:
+        - x64
+    # 如需 NSIS 安装包，取消下行注释
+    # - target: nsis
+    #   arch:
+    #     - x64
+
+# portable 配置（单文件 exe）
+portable:
+  artifactName: ${productName}-${version}.${ext}
+
+# NSIS 配置（未启用）
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: CopyCraft
+
+# 构建前钩子：先 Vite 构建，再 electron-builder
+# （在 package.json 的 script 里用 && 串联）
