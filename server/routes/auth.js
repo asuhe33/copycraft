@@ -44,11 +44,28 @@ router.post('/request-code', async (req, res) => {
   const now = Date.now();
   await db.saveVerifyCode({ email, code, expiresAt: now + VERIFY_CODE_TTL, createdAt: now });
 
-  const send = await sendVerifyCode(email, code);
-  if (send.devOnly) {
-    return res.json({ ok: true, devOnly: true, code, expiresAt: now + VERIFY_CODE_TTL });
+  try {
+    const send = await sendVerifyCode(email, code);
+    if (send.devOnly) {
+      return res.json({ ok: true, devOnly: true, code, expiresAt: now + VERIFY_CODE_TTL });
+    }
+    return res.json({ ok: true, devOnly: false, expiresAt: now + VERIFY_CODE_TTL });
+  } catch (err) {
+    // 节流：返回 429 + retryAfter，前端可提示"请 Xs 后再试"
+    if (err && err.name === 'CooldownError') {
+      return res.status(429).json({
+        ok: false,
+        error: `请求过于整数，请 ${err.retryAfter}s 后再试`,
+        retryAfter: err.retryAfter,
+      });
+    }
+    // 邮件通道异常：502 + 友好提示，server 日志保留真实 stack
+    console.error('[auth] sendVerifyCode failed:', err.message || err);
+    return res.status(502).json({
+      ok: false,
+      error: '邮件通道暂时不可用，请稍后再试或联系管理员',
+    });
   }
-  return res.json({ ok: true, devOnly: false, expiresAt: now + VERIFY_CODE_TTL });
 });
 
 router.post('/verify-code', async (req, res) => {

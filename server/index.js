@@ -7,6 +7,7 @@
  * 环境变量：
  *   PORT / JWT_SECRET(必填) / DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
  *   VERIFY_CODE_TTL / SESSION_TTL / DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / DB_INIT_BEFORE_BOOT
+ *   邮件（PROD，opt-in）：EMAIL_SMTP_URI | (EMAIL_PROVIDER=resend + RESEND_API_KEY) / MAIL_FROM / EMAIL_COOLDOWN_MS
  */
 import express from 'express';
 import cors from 'cors';
