@@ -142,7 +142,11 @@ async function withCooldown(email, fn) {
 export async function sendVerifyCode(email, code) {
   if (!IS_PROD) {
     return withCooldown(email, async () => {
-      console.log('[mailer:dev] verify code ' + email + ' -> ' + code);
+      // 仅 DEBUG=1 时打印 email hash；任何情形下都不输出验证码
+      if (process.env.DEBUG === '1') {
+        const h = require('node:crypto').createHash('sha256').update(email).digest('hex').slice(0, 8);
+        console.log('[mailer:dev] verify code sent to hash=' + h + ' (set DEBUG=1 to enable)');
+      }
       return { code, devOnly: true };
     });
   }

@@ -26,7 +26,12 @@ import accountRoutes from './routes/account.js';
 
 const PORT = process.env.PORT || 3001;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
-const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+// 强制 https：杜绝 SSRF 到内网 http 网关（环境变量不可信模型下的防御）
+const RAW_BASE = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+const DEEPSEEK_BASE_URL = RAW_BASE.startsWith('https://') ? RAW_BASE : (() => {
+  console.warn(`[CopyCraft] DEEPSEEK_BASE_URL 必须以 https:// 开头，已强制改为默认 https://api.deepseek.com/v1`);
+  return 'https://api.deepseek.com/v1';
+})();
 
 async function maybeBootstrap() {
   if (process.env.DB_INIT_BEFORE_BOOT !== '1') return;

@@ -9,11 +9,14 @@ const router = express.Router();
 
 const VALID_PLATFORMS = ['xiaohongshu', 'weibo', 'douyin', 'gongzhonghao'];
 
+const MAX_CONTENT_LEN = 100_000; // 单条文案 100KB 上限（正常文案 < 10KB）
+const MAX_ID_LEN = 64;
+
 function sanitizeHistoryItem(it) {
   if (!it || typeof it !== 'object') return null;
-  const id = String(it.id || '').trim();
+  const id = String(it.id || '').trim().slice(0, MAX_ID_LEN);
   if (!id) return null;
-  const content = String(it.content || '');
+  const content = String(it.content || '').slice(0, MAX_CONTENT_LEN);
   const platform = String(it.platform || 'xiaohongshu');
   if (!VALID_PLATFORMS.includes(platform)) return null;
   const createdAt = Number(it.createdAt) || 0;

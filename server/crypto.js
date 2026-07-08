@@ -60,7 +60,10 @@ function newSessionToken(userId, deviceId) {
   return signToken({ uid: userId, did: deviceId || null, iat: now, exp: now + SESSION_TTL });
 }
 
-const AES_KEY = crypto.scryptSync(JWT_SECRET || 'copycraft-fallback', 'copycraft-apikey-fixed-salt', 32);
+// HKDF 派生：从 JWT_SECRET 派生独立的 32 字节 AES 密钥（与 HMAC 密钥分离）。
+// 比单一 scrypt 派生更规范（RFC 5869），且避免未来误用 JWT_SECRET 直接当 AES key。
+const AES_KEY = crypto.hkdfSync('sha256', JWT_SECRET || 'copycraft-fallback',
+  'copycraft-apikey-fixed-salt', 'copycraft-aes-keyinfo', 32);
 
 function aesEncrypt(plain) {
   const iv = crypto.randomBytes(12);
