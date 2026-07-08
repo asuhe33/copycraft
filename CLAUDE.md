@@ -45,6 +45,32 @@
 ### 阶段 3 ✅ DeepSeek 流式生成 + 中止 + 错误态
 ### 阶段 4 ✅ 历史记录持久化 + 导出 Markdown + 历史 CRUD
 ### 阶段 5 ✅ PWA 落地 + 后端代理框架 + 多平台 Prompt 空间
+### 阶段 6 ✅ 邮件通道 PROD + 安全加固 + 桌面单机版（v1.0.1）
+
+#### 桌面单机版（Electron 34，2026-07-08）
+- `electron/main.cjs` + `electron/preload.cjs`：主进程加载 dist/index.html，不启动后端
+- 桌面模式编译期开关 `VITE_MODE=desktop`：tree-shaking 砍掉 AccountSync 区块
+- `electron-builder.yml`：Windows portable 目标（sign:false，待证书）
+- 产物：`release/CopyCraft-1.0.1-win-portable.zip`（115MB）/ `release/win-unpacked/CopyCraft.exe`（182MB）
+- 用户自备 DeepSeek Key 直连；同步/注册/云 Key UI 自动隐藏
+
+#### 邮件通道 PROD（opt-in）
+- `server/mailer.js`：nodemailer@8；双后端 SMTP（`EMAIL_SMTP_URI`）/ Resend（`EMAIL_PROVIDER=resend + RESEND_API_KEY`）
+- 节流 60s + 内存 GC 1000 条；日志脱敏（prod 不输出 code/email）
+- `server/routes/auth.js`：失败分级（429 + retryAfter / 502 友好中文）
+
+#### 安全加固
+- CORS 白名单（`CORS_ORIGIN` 环境变量；默认 localhost + tauri://localhost）
+- 防 email 枚举（`/request-code` 不区分账户是否存在）
+- AES 密钥改用 HKDF-SHA256 派生（RFC 5869）
+- DEEPSEEK_BASE_URL 强制 https://（防 SSRF）
+- history content 限 100KB / id 限 64 字符
+- dev 模式日志脱敏（仅 DEBUG=1 下输出 email hash）
+
+#### 测试（43/43 PASS）
+- `scripts/e2e-mailer.mjs`（4/4）/ `scripts/e2e-mysql.mjs`（9/9）/ `scripts/e2e-auth-mailer.mjs`（5/5）
+- `tsc + build` / 桌面冒烟
+- 文档：`docs/TESTING.md`
 
 #### PWA 关键实现
 - `manifest.webmanifest`：全屏独立运行 + 主屏幕图标
@@ -298,7 +324,7 @@ npm run electron:build              # 打包：先 build:desktop，再 electron-
 PowerShell -File scripts/package-desktop-zip.ps1  # win-unpacked → zip
 产物位置：
   release/win-unpacked/CopyCraft.exe（182MB 单文件）
-  release/CopyCraft-0.1.0-win-portable.zip（115MB，双击 exe 解压缩后运行）
+  release/CopyCraft-1.0.1-win-portable.zip（115MB，双击 exe 解压缩后运行）
 桌面版限制：同步/注册/云 Key UI 已屏蔽；用户自备 DeepSeek Key 直连
 
 # GitHub Actions 状态

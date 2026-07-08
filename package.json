@@ -1,6 +1,6 @@
 {
   "name": "copycraft",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "CopyCraft · 多平台文案适配分发工具 MVP",
