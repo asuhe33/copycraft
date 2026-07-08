@@ -49,21 +49,25 @@ try {
   const h = await call('GET', '/api/health');
   ck('health', h.status === 200 && h.body.db === 'ok', JSON.stringify(h.body));
 
-  const email = `mailer.${Date.now()}@t.com`;
-  const r1 = await call('POST', '/api/auth/request-code', { email, mode: 'register' });
-  ck('request-code dev mode returns code+devOnly',
-     r1.status === 200 && r1.body.devOnly === true && /^\d{6}$/.test(r1.body.code),
-     JSON.stringify(r1.body));
+  // ── A：完整注册链路（email A 不触发节流） ─────────────────
+  const emailA = `mailer.A.${Date.now()}@t.com`;
+  const rA = await call('POST', '/api/auth/request-code', { email: emailA, mode: 'register' });
+  ck('A1 request-code dev mode returns code+devOnly',
+     rA.status === 200 && rA.body.devOnly === true && /^\d{6}$/.test(rA.body.code),
+     JSON.stringify(rA.body));
+  const vA = await call('POST', '/api/auth/verify-code', {
+    email: emailA, code: rA.body.code, password: 'pw123456', mode: 'register',
+  });
+  ck('A2 verify-code success with fresh code', vA.status === 200 && !!vA.body.token,
+     'token=' + (vA.body.token ? 'yes' : 'no'));
 
-  // 节流：立刻再发一次（后端默认 60s cooldown）
-  const r2 = await call('POST', '/api/auth/request-code', { email, mode: 'register' });
-  ck('second request-code within cooldown returns 429',
-     r2.status === 429 && r2.body.retryAfter > 0,
-     JSON.stringify(r2.body));
-
-  // 验证发码 + 登录完整链路仍然通
-  const v = await call('POST', '/api/auth/verify-code', { email, code: r1.body.code, password: 'pw123456', mode: 'register' });
-  ck('verify-code success after dev cooldown untouched', v.status === 200 && !!v.body.token, 'token=' + (v.body.token ? 'yes' : 'no'));
+  // ── B：节流路径（email B 立刻发两次） ─────────────────────
+  const emailB = `mailer.B.${Date.now()}@t.com`;
+  const rB1 = await call('POST', '/api/auth/request-code', { email: emailB, mode: 'register' });
+  ck('B1 first request-code ok', rB1.status === 200, JSON.stringify(rB1.body));
+  const rB2 = await call('POST', '/api/auth/request-code', { email: emailB, mode: 'register' });
+  ck('B2 second request within cooldown → 429',
+     rB2.status === 429 && rB2.body.retryAfter > 0, JSON.stringify(rB2.body));
 
 } catch (e) {
   console.error('FATAL', e);
